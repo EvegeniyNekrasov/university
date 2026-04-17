@@ -3,6 +3,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Npgsql;
+using University.Data.Auth;
 
 namespace University.Data.Configuration;
 
@@ -14,10 +15,10 @@ public static class ServiceCollectionExtensions
         )
     {
         services.AddOptions<PostgresOptions>()
-          .Bind(configuration.GetSection(PostgresOptions.SectionName))
-          .ValidateDataAnnotations()
-          .Validate(o => o.MaxPoolSize >= o.MinPoolSize, "Postgres: MaxPoolSize debe ser >= MinPoolSize")
-          .ValidateOnStart();
+        .Bind(configuration.GetSection(PostgresOptions.SectionName))
+        .ValidateDataAnnotations()
+        .Validate(o => o.MaxPoolSize >= o.MinPoolSize, "Postgres: MaxPoolSize debe ser >= MinPoolSize")
+        .ValidateOnStart();
 
         services.AddSingleton<NpgsqlDataSource>(sp =>
         {
@@ -53,9 +54,11 @@ public static class ServiceCollectionExtensions
         });
 
         #region DAO
+        services.AddScoped<IAuthUserDao, AuthUserDao>();
         #endregion
 
         #region REPOSITORY 
+        services.AddScoped<IAuthRepository, AuthRepository>();
         #endregion
 
         return services;

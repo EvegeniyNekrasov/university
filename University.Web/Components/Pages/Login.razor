@@ -1,0 +1,95 @@
+@page "/login"
+@layout EmptyLayout
+@attribute [AllowAnonymous]
+
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.AspNetCore.Components.Authorization
+@using Microsoft.AspNetCore.Components.Forms
+@using MudBlazor
+@using University.Web.Utils.Auth
+
+@inject NavigationManager Navigation
+
+<div class="login-page">
+    <MudContainer MaxWidth="MaxWidth.ExtraSmall" Class="d-flex justify-center align-center" Style="min-height:100vh;">
+        <MudPaper Elevation="10" Class="pa-8" Style="width:100%;">
+            <MudText Typo="Typo.h5" Class="mb-6">Iniciar sesión</MudText>
+
+            @if (!string.IsNullOrWhiteSpace(ErrorMessage))
+            {
+                <MudAlert Severity="Severity.Error" Dense="true" Class="mb-4">
+                    @ErrorMessage
+                </MudAlert>
+            }
+
+            <form method="post" action="/account/login" @formname="login">
+                <AntiforgeryToken />
+
+                <input type="hidden" name="ReturnUrl" value="@SafeReturnUrl" />
+
+                <MudTextField T="string" Label="Correo" Variant="Variant.Outlined" FullWidth="true" Immediate="true"
+                              Required="true" InputType="InputType.Email" @bind-Value="_model.Email"
+                              UserAttributes="_emailAttributes" />
+
+                <MudTextField T="string" Label="Contraseña" Variant="Variant.Outlined" FullWidth="true" Immediate="true"
+                              Required="true" InputType="InputType.Password" Class="mt-4" @bind-Value="_model.Password"
+                              UserAttributes="_passwordAttributes" />
+
+                <MudCheckBox T="bool" Label="Recordarme" Class="mt-4" @bind-Value="_model.RememberMe" />
+
+                <input type="hidden" name="RememberMe" value="@(_model.RememberMe ? "true" : "false")" />
+
+                <MudButton ButtonType="ButtonType.Submit" Variant="Variant.Filled" Color="Color.Primary"
+                           FullWidth="true" Class="mt-6">
+                    Entrar
+                </MudButton>
+            </form>
+        </MudPaper>
+    </MudContainer>
+</div>
+
+@code {
+    [SupplyParameterFromQuery] public string? ReturnUrl { get; set; }
+    [SupplyParameterFromQuery] public string? Error { get; set; }
+
+    [CascadingParameter] private Task<AuthenticationState>? AuthenticationStateTask { get; set; }
+
+    private readonly LoginVm _model = new();
+
+    private readonly Dictionary<string, object?> _emailAttributes = new()
+    {
+        ["name"] = "Email",
+        ["autocomplete"] = "username"
+    };
+
+    private readonly Dictionary<string, object?> _passwordAttributes = new()
+    {
+        ["name"] = "Password",
+        ["autocomplete"] = "current-password"
+    };
+
+    private string SafeReturnUrl => AuthHelper.IsSafeLocalUrl(ReturnUrl) ? ReturnUrl! : "/";
+
+    private string? ErrorMessage => Error switch
+    {
+        "invalid" => "Credenciales no válidas.",
+        "locked" => "Cuenta bloqueada temporalmente. Inténtalo más tarde.",
+        _ => null
+    };
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthenticationStateTask!;
+        if (authState.User.Identity?.IsAuthenticated == true)
+        {
+            Navigation.NavigateTo(SafeReturnUrl, forceLoad: true);
+        }
+    }
+
+    private sealed class LoginVm
+    {
+        public string Email { get; set; } = "";
+        public string Password { get; set; } = "";
+        public bool RememberMe { get; set; }
+    }
+}

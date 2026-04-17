@@ -1,16 +1,12 @@
 ﻿@inherits LayoutComponentBase
 
-<MudThemeProvider />
-<MudPopoverProvider />
-<MudDialogProvider />
-<MudSnackbarProvider />
-
 <MudLayout>
     <MudAppBar Elevation="1">
         <MudIconButton Icon="@Icons.Material.Filled.Menu" Color="Color.Inherit" Edge="Edge.Start"
                        OnClick="ToogleDrawer">
             <MudText Typo="Typo.h6">University</MudText>
         </MudIconButton>
+        <MudTextField @bind-Value="SearchValue" Label="Outlined" Variant="Variant.Outlined"></MudTextField>
     </MudAppBar>
 
     <MudDrawer @bind-Open="_drawerOpen" Variant="DrawerVariant.Responsive" Elevation="1" Width="260px">
@@ -28,6 +24,10 @@
             </MudTreeView>
         </MudPaper>
 
+        <form method="post" action="/account/logout">
+            <button type="submit" class="btn btn-link">Salir</button>
+        </form>
+
         <MudNavMenu>
             <MudNavLink Href="/" Match="NavLinkMatch.All" Icon="@Icons.Material.Filled.Home">
                 Home
@@ -35,13 +35,14 @@
         </MudNavMenu>
     </MudDrawer>
 
-    <MudMainContent>
+    <MudMainContent Class="main-content">
         @Body
     </MudMainContent>
 </MudLayout>
 
 @code {
-    private bool _drawerOpen = false;
+    private bool _drawerOpen = true;
+    private string SearchValue { get; set; } = string.Empty;
 
     private void ToogleDrawer()
     {
