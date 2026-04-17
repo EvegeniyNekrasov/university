@@ -2,6 +2,7 @@ using University.Data.Configuration;
 using University.Web.Components;
 using Serilog;
 using Serilog.Events;
+using MudBlazor.Services;
 
 Log.Logger = new LoggerConfiguration()
     .MinimumLevel.Information()
@@ -17,6 +18,8 @@ try
 {
     builder.Services.AddRazorComponents()
         .AddInteractiveServerComponents();
+
+    builder.Services.AddMudServices();
 
     builder.Services.AddSerilog((services, ls) => ls
         .ReadFrom.Configuration(builder.Configuration)
@@ -39,7 +42,7 @@ try
             if (ex != null || httpContext.Response.StatusCode >= 500)
             {
                 return LogEventLevel.Error;
-            }   
+            }
 
             if (httpContext.Response.StatusCode >= 400)
             {
