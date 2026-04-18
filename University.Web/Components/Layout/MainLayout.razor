@@ -24,7 +24,8 @@
             </MudTreeView>
         </MudPaper>
 
-        <form method="post" action="/account/logout">
+        <form method="post" action="/account/logout" data-enhance="false">
+            <AntiforgeryToken />
             <button type="submit" class="btn btn-link">Salir</button>
         </form>
 

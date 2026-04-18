@@ -16,6 +16,11 @@ public interface IAuthRepository
         CreateAuthuserRow user,
         CancellationToken ct);
 
+    Task AssignRoleAsync(
+        Guid userId,
+        string roleName,
+        CancellationToken ct);
+
     Task RegisterFailedLoginAsync(
         Guid userId,
         int maxFailedAttempts,

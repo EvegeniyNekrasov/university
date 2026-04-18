@@ -10,4 +10,10 @@ public interface IAuthService
         string? displayName,
         bool emailConfirmed,
         CancellationToken ct);
+
+    Task<RegisterUserResult> RegisterUserAsync(
+        string email,
+        string password,
+        string? displayName,
+        CancellationToken ct);
 }

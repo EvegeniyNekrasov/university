@@ -82,4 +82,49 @@ public sealed class AuthService(
 
         await authRepository.CreateUserAsync(row, ct);
     }
+
+    public async Task<RegisterUserResult> RegisterUserAsync(
+        string email,
+        string password,
+        string? displayName,
+        CancellationToken ct)
+    {
+        email = email.Trim();
+
+        if (string.IsNullOrWhiteSpace(email) || string.IsNullOrWhiteSpace(password))
+            return RegisterUserResult.Invalid();
+
+        var existing = await authRepository.FindByEmailAsync(email, ct);
+        if (existing is not null)
+            return RegisterUserResult.Duplicate();
+
+        var userId = Guid.NewGuid();
+        var securityStamp = Guid.NewGuid().ToString("N");
+        var normalizedEmail = email.ToUpperInvariant();
+
+        var passwordUser = new AuthPasswordUser(userId, email, securityStamp);
+        var passwordHash = passwordHasher.HashPassword(passwordUser, password);
+
+        var row = new CreateAuthuserRow(
+            userId,
+            email,
+            normalizedEmail,
+            passwordHash,
+            string.IsNullOrWhiteSpace(displayName) ? null : displayName.Trim(),
+            IsActive: true,
+            EmailConfirmed: true,
+            SecurityStamp: securityStamp);
+
+        await authRepository.CreateUserAsync(row, ct);
+        await authRepository.AssignRoleAsync(userId, "Student", ct);
+
+        var roles = await authRepository.GetRolesAsync(userId, ct);
+
+        return RegisterUserResult.Success(
+            userId,
+            email,
+            displayName,
+            securityStamp,
+            roles);
+    }
 }

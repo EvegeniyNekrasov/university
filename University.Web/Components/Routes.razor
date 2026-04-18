@@ -1,25 +1,22 @@
 ﻿@using Microsoft.AspNetCore.Components.Authorization
 
-
-<CascadingAuthenticationState>
-    <Router AppAssembly="@typeof(Program).Assembly">
-        <Found Context="routeData">
-            <AuthorizeRouteView RouteData="@routeData" DefaultLayout="@typeof(Layout.MainLayout)">
-                <NotAuthorized>
-                    @if (context.User.Identity?.IsAuthenticated != true)
-                    {
-                        <RedirectToLogin />
-                    }
-                    else
-                    {
-                        <LayoutView Layout="@typeof(Layout.EmptyLayout)">
-                            <MudAlert Severity="Severity.Error">
-                                No autorizado.
-                            </MudAlert>
-                        </LayoutView>
-                    }
-                </NotAuthorized>
-            </AuthorizeRouteView>
-        </Found>
-    </Router>
-</CascadingAuthenticationState>
+<Router AppAssembly="@typeof(Program).Assembly">
+    <Found Context="routeData">
+        <AuthorizeRouteView RouteData="@routeData" DefaultLayout="@typeof(Layout.MainLayout)">
+            <NotAuthorized>
+                @if (context.User.Identity?.IsAuthenticated != true)
+                {
+                    <RedirectToLogin />
+                }
+                else
+                {
+                    <LayoutView Layout="@typeof(Layout.EmptyLayout)">
+                        <MudAlert Severity="Severity.Error">
+                            No autorizado.
+                        </MudAlert>
+                    </LayoutView>
+                }
+            </NotAuthorized>
+        </AuthorizeRouteView>
+    </Found>
+</Router>

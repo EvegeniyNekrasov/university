@@ -1,0 +1,111 @@
+@page "/register"
+@layout EmptyLayout
+@attribute [AllowAnonymous]
+
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.AspNetCore.Components.Authorization
+@using Microsoft.AspNetCore.Components.Forms
+@using MudBlazor
+@using University.Web.Utils.Auth
+
+@inject NavigationManager Navigation
+
+<MudContainer MaxWidth="MaxWidth.Small" Style="margin-top:80px;">
+    <MudPaper Class="pa-6" Elevation="6">
+        <MudText Typo="Typo.h5" GutterBottom="true">Crear cuenta</MudText>
+
+        @if (!string.IsNullOrWhiteSpace(ErrorMessage))
+        {
+            <MudAlert Severity="Severity.Error" Dense="true" Class="mb-4">
+                @ErrorMessage
+            </MudAlert>
+        }
+
+        <form method="post" action="/account/register" data-enhance="false" @formname="register">
+            <AntiforgeryToken />
+
+            <input type="hidden" name="ReturnUrl" value="@SafeReturnUrl" />
+
+            <MudTextField T="string" Label="Nombre visible" Variant="Variant.Outlined" FullWidth="true"
+                          Margin="Margin.Dense" @bind-Value="_model.DisplayName" UserAttributes="_displayNameAttributes" />
+
+            <MudTextField T="string" Label="Correo" Variant="Variant.Outlined" FullWidth="true" Margin="Margin.Dense"
+                          InputType="InputType.Email" Class="mt-4" @bind-Value="_model.Email" UserAttributes="_emailAttributes" />
+
+            <MudTextField T="string" Label="Contraseña" Variant="Variant.Outlined" FullWidth="true"
+                          Margin="Margin.Dense" InputType="InputType.Password" Class="mt-4" @bind-Value="_model.Password"
+                          UserAttributes="_passwordAttributes" />
+
+            <MudTextField T="string" Label="Confirmar contraseña" Variant="Variant.Outlined" FullWidth="true"
+                          Margin="Margin.Dense" InputType="InputType.Password" Class="mt-4" @bind-Value="_model.ConfirmPassword"
+                          UserAttributes="_confirmPasswordAttributes" />
+
+            <MudButton ButtonType="ButtonType.Submit" Variant="Variant.Filled" Color="Color.Primary" FullWidth="true"
+                       Class="mt-6">
+                Registrarme
+            </MudButton>
+        </form>
+
+        <MudText Class="mt-4">
+            ¿Ya tienes cuenta?
+            <MudLink Href="/login">Inicia sesión</MudLink>
+        </MudText>
+    </MudPaper>
+</MudContainer>
+
+@code {
+    [SupplyParameterFromQuery] public string? ReturnUrl { get; set; }
+    [SupplyParameterFromQuery] public string? Error { get; set; }
+
+    [CascadingParameter] private Task<AuthenticationState>? AuthenticationStateTask { get; set; }
+
+    private readonly RegisterVm _model = new();
+
+    private readonly Dictionary<string, object?> _displayNameAttributes = new()
+    {
+        ["name"] = "DisplayName",
+        ["autocomplete"] = "name"
+    };
+
+    private readonly Dictionary<string, object?> _emailAttributes = new()
+    {
+        ["name"] = "Email",
+        ["autocomplete"] = "username"
+    };
+
+    private readonly Dictionary<string, object?> _passwordAttributes = new()
+    {
+        ["name"] = "Password",
+        ["autocomplete"] = "new-password"
+    };
+
+    private readonly Dictionary<string, object?> _confirmPasswordAttributes = new()
+    {
+        ["name"] = "ConfirmPassword",
+        ["autocomplete"] = "new-password"
+    };
+
+    private string SafeReturnUrl => AuthHelper.IsSafeLocalUrl(ReturnUrl) ? ReturnUrl! : "/";
+
+    private string? ErrorMessage => Error switch
+    {
+        "duplicate" => "Ya existe un usuario con ese correo.",
+        "invalid" => "Revisa los datos del formulario.",
+        _ => null
+    };
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthenticationStateTask!;
+        if (authState.User.Identity?.IsAuthenticated == true)
+            Navigation.NavigateTo(SafeReturnUrl, forceLoad: true);
+    }
+
+    private sealed class RegisterVm
+    {
+        public string? DisplayName { get; set; }
+        public string Email { get; set; } = "";
+        public string Password { get; set; } = "";
+        public string ConfirmPassword { get; set; } = "";
+    }
+}

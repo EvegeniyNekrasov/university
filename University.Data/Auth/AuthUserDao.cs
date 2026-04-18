@@ -141,6 +141,32 @@ public sealed class AuthUserDao(NpgsqlDataSource dataSource) : IAuthUserDao
         await cmd.ExecuteNonQueryAsync(ct);
     }
 
+    public async Task AssignRoleAsync(Guid userId, string roleName, CancellationToken ct)
+    {
+        const string sql = """
+            insert into auth.user_roles (user_id, role_id)
+            select @user_id, r.id
+            from auth.roles r
+            where r.name = @role_name
+            on conflict do nothing;
+        """;
+
+        await using var conn = await dataSource.OpenConnectionAsync(ct);
+        await using var cmd = new NpgsqlCommand(sql, conn);
+
+        cmd.Parameters.AddWithValue("user_id", userId);
+        cmd.Parameters.AddWithValue("role_name", roleName);
+
+        var affected = await cmd.ExecuteNonQueryAsync(ct);
+
+        if (affected == 0)
+        {
+            throw new InvalidOperationException(
+                $"No se pudo asignar el rol '{roleName}' al usuario '{userId}'. " +
+                "El rol no existe o ya estaba asignado.");
+        }
+    }
+
     public async Task RegisterFailedLoginAsync(
         Guid userId,
         int maxFailedAttempts,

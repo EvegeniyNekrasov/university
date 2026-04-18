@@ -22,7 +22,7 @@
                 </MudAlert>
             }
 
-            <form method="post" action="/account/login" @formname="login">
+            <form method="post" action="/account/login" data-enhance="false" @formname="login">
                 <AntiforgeryToken />
 
                 <input type="hidden" name="ReturnUrl" value="@SafeReturnUrl" />
@@ -44,6 +44,10 @@
                     Entrar
                 </MudButton>
             </form>
+            <MudText Class="mt-4">
+                ¿No tienes cuenta?
+                <MudLink Href="/register">Crear cuentra</MudLink>
+            </MudText>
         </MudPaper>
     </MudContainer>
 </div>

@@ -15,6 +15,9 @@ public sealed class AuthRepository(IAuthUserDao dao) : IAuthRepository
     public Task CreateUserAsync(CreateAuthuserRow user, CancellationToken ct)
         => dao.InsertUserAsync(user, ct);
 
+    public Task AssignRoleAsync(Guid userId, string roleName, CancellationToken ct)
+        => dao.AssignRoleAsync(userId, roleName, ct);
+
     public Task RegisterFailedLoginAsync(Guid userId, int maxFailedAttempts, TimeSpan lockoutDuration, CancellationToken ct)
         => dao.RegisterFailedLoginAsync(userId, maxFailedAttempts, lockoutDuration, ct);
 

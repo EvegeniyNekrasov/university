@@ -14,6 +14,13 @@ public static partial class ServiceCollectionExtensions
                 limiterOptions.Window = TimeSpan.FromMinutes(1);
                 limiterOptions.QueueLimit = 0;
             });
+
+            options.AddFixedWindowLimiter("register", limiterOptions =>
+            {
+                limiterOptions.PermitLimit = 3;
+                limiterOptions.Window = TimeSpan.FromMinutes(5);
+                limiterOptions.QueueLimit = 0;
+            });
         });
 
         return services;
