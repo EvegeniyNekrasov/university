@@ -3,7 +3,6 @@ using University.Web.Components;
 using University.Web.Endpoints;
 using University.Web.Extensions;
 using University.Web.Infrastructure.Logging;
-using University.Web.Infrastructure.Seed;
 
 LoggingSetup.ConfigureBootstrapLogger();
 
@@ -23,11 +22,6 @@ try
 
     app.ConfigureRequestLogging();
     app.UseAppPipeline();
-
-    if (app.Environment.IsDevelopment())
-    {
-        await DevelopmentDataSeeder.SeedAsync(app.Services);
-    }
 
     // Esto es para que funcione MudBlazor.css en la página Login con EmptyLayout
     app.MapStaticAssets().AllowAnonymous();
