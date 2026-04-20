@@ -1,0 +1,43 @@
+@inherits HighchartsComponentBase
+
+<div id="@ContainerId" class="@Class" style="width:100%; height:@Height;"></div>
+
+@code {
+    [Parameter] public string? Title { get; set; }
+    [Parameter] public string Height { get; set; } = "400px";
+    [Parameter] public string? Class { get; set; }
+
+    [Parameter] public string SeriesName { get; set; } = "Datos";
+    [Parameter] public IReadOnlyList<PiePoint> Data { get; set; } = [];
+
+    [Parameter] public bool ShowLegend { get; set; } = true;
+    [Parameter] public bool ShowDataLabels { get; set; } = true;
+    [Parameter] public string? InnerSize { get; set; } // "0%" normal, "60%" donut
+    [Parameter] public string? ValueSuffix { get; set; } // "%", "€", etc.
+
+    protected override string ModulePath => "./Components/UiComponents/Charts/PieChart.razor.js";
+
+    protected override object BuildConfig()
+    {
+        return new
+        {
+            title = Title,
+            heightPx = ParseHeightPx(Height),
+            showLegend = ShowLegend,
+            showDataLabels = ShowDataLabels,
+            innerSize = InnerSize,
+            valueSuffix = ValueSuffix,
+            series = new
+            {
+                name = SeriesName,
+                data = Data.Select(p => new
+                {
+                    name = p.Name,
+                    y = p.Y,
+                    sliced = p.Sliced,
+                    selected = p.Selected
+                }).ToList()
+            }
+        };
+    }
+}

@@ -1,5 +1,6 @@
 ﻿@page "/"
 @using Microsoft.AspNetCore.Authorization
+@using University.Web.Components.UiComponents.Charts
 @attribute [Authorize]
 
 <PageTitle>Home</PageTitle>
@@ -9,3 +10,56 @@
 this is my university app
 
 <MudAvatar Color="Color.Primary">M</MudAvatar>
+
+<PieChart Title="Distribución" Data="@_marketShare" InnerSize="60%" ValueSuffix="%" SeriesName="Canales" />
+
+<StockChart Title="Comparativa" Height="450px" Series="@series" YAxisTitle="Precio" />
+
+<Chart Title="Ingresos" Type="column" Categories="@months" Series="@series2" YAxisTitle="€" />
+
+@code {
+    private readonly List<PiePoint> _marketShare =
+    [
+        new() { Name = "Apple", Y = 32.5m, Sliced = true, Selected = true },
+        new() { Name = "Samsung", Y = 27.1m },
+        new() { Name = "Xiaomi", Y = 14.3m },
+        new() { Name = "Oppo", Y = 9.8m },
+        new() { Name = "Otros", Y = 16.3m }
+    ];
+
+    private readonly List<string> months = ["Ene", "Feb", "Mar", "Abr"];
+
+    private readonly List<ChartSeries> series2 =
+    [
+        new()
+        {
+            Name = "2026",
+            Data = [120m, 150m, 170m, 160m]
+        }
+    ];
+    private readonly List<StockSeries> series =
+    [
+        new()
+        {
+            Name = "Serie A",
+            Type = "line",
+            Data =
+            [
+                new StockPoint(DateTimeOffset.Parse("2026-04-14").ToUnixTimeMilliseconds(), 10m),
+                new StockPoint(DateTimeOffset.Parse("2026-04-15").ToUnixTimeMilliseconds(), 12m),
+                new StockPoint(DateTimeOffset.Parse("2026-04-16").ToUnixTimeMilliseconds(), 11m),
+            ]
+        },
+        new()
+        {
+            Name = "Serie B",
+            Type = "area",
+            Data =
+            [
+                new StockPoint(DateTimeOffset.Parse("2026-04-14").ToUnixTimeMilliseconds(), 8m),
+                new StockPoint(DateTimeOffset.Parse("2026-04-15").ToUnixTimeMilliseconds(), 9m),
+                new StockPoint(DateTimeOffset.Parse("2026-04-16").ToUnixTimeMilliseconds(), 13m),
+            ]
+        }
+    ];
+}

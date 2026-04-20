@@ -1,0 +1,128 @@
+@using System.Text.Json
+@using System.Text.Json.Serialization
+@inject IJSRuntime JS
+
+
+<div id="@_containerId" class="@Class" style="width:100%; height:@Height;"></div>
+
+@code {
+    private IJSObjectReference? _module;
+    private readonly string _containerId = $"hc_{Guid.NewGuid():N}";
+    private string? _lastSerializedConfig;
+
+    [Parameter] public string? Title { get; set; }
+    [Parameter] public string Type { get; set; } = "line";
+    [Parameter] public string Height { get; set; } = "400px";
+    [Parameter] public string? Class { get; set; }
+
+    [Parameter] public string? YAxisTitle { get; set; }
+    [Parameter] public bool ShowLegend { get; set; } = true;
+    [Parameter] public bool UseUtc { get; set; } = false;
+    [Parameter] public int RangeSelectorSelected { get; set; } = 1;
+
+    // Modo simple: una sola serie
+    [Parameter] public IEnumerable<StockPoint>? Data { get; set; }
+    [Parameter] public string SeriesName { get; set; } = "Serie 1";
+
+    // Modo avanzado: varias series
+    [Parameter] public IReadOnlyList<StockSeries>? Series { get; set; }
+
+    private static readonly JsonSerializerOptions JsonOptions = new()
+    {
+        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
+    };
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        var config = BuildConfig();
+        var serialized = JsonSerializer.Serialize(config, JsonOptions);
+
+        if (firstRender)
+        {
+            _module = await JS.InvokeAsync<IJSObjectReference>(
+                "import",
+                "./Components/UiComponents/Charts/StockChart.razor.js");
+
+            await _module.InvokeVoidAsync("render", _containerId, config);
+            _lastSerializedConfig = serialized;
+            return;
+        }
+
+        if (_module is not null && serialized != _lastSerializedConfig)
+        {
+            await _module.InvokeVoidAsync("update", _containerId, config);
+            _lastSerializedConfig = serialized;
+        }
+    }
+
+    private object BuildConfig()
+    {
+        var resolvedSeries = ResolveSeries();
+
+        return new
+        {
+            title = Title,
+            type = Type,
+            heightPx = ParseHeightPx(Height),
+            yAxisTitle = YAxisTitle,
+            showLegend = ShowLegend,
+            useUtc = UseUtc,
+            rangeSelectorSelected = RangeSelectorSelected,
+            series = resolvedSeries.Select(s => new
+            {
+                name = s.Name,
+                type = s.Type,
+                data = s.Data.Select(p => new { x = p.X, y = p.Y }).ToList()
+            }).ToList()
+        };
+    }
+
+    private IReadOnlyList<StockSeries> ResolveSeries()
+    {
+        if (Series is { Count: > 0 })
+        {
+            return Series;
+        }
+
+        return
+        [
+            new StockSeries
+            {
+                Name = SeriesName,
+                Type = Type,
+                Data = Data?.ToList() ?? []
+            }
+        ];
+    }
+
+    private static int ParseHeightPx(string height)
+    {
+        if (string.IsNullOrWhiteSpace(height))
+            return 400;
+
+        if (height.EndsWith("px", StringComparison.OrdinalIgnoreCase) &&
+            int.TryParse(height[..^2], out var px))
+        {
+            return px;
+        }
+
+        return 400;
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_module is null)
+            return;
+
+        try
+        {
+            await _module.InvokeVoidAsync("destroy", _containerId);
+            await _module.DisposeAsync();
+        }
+        catch (JSDisconnectedException)
+        {
+            // Blazor Server / InteractiveServer: ignorar desconexión del circuito
+        }
+    }
+}

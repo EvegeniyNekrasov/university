@@ -1,0 +1,39 @@
+@inherits HighchartsComponentBase
+
+<div id="@ContainerId" class="@Class" style="width:100%; height:@Height;"></div>
+
+@code {
+    [Parameter] public string? Title { get; set; }
+    [Parameter] public string Type { get; set; } = "line";
+    [Parameter] public string Height { get; set; } = "400px";
+    [Parameter] public string? Class { get; set; }
+
+    [Parameter] public IReadOnlyList<string>? Categories { get; set; }
+    [Parameter] public IReadOnlyList<ChartSeries> Series { get; set; } = [];
+
+    [Parameter] public string? XAxisTitle { get; set; }
+    [Parameter] public string? YAxisTitle { get; set; }
+    [Parameter] public bool ShowLegend { get; set; } = true;
+
+    protected override string ModulePath => "./Components/UiComponents/Charts/Chart.razor.js";
+
+    protected override object BuildConfig()
+    {
+        return new
+        {
+            title = Title,
+            type = Type,
+            heightPx = ParseHeightPx(Height),
+            categories = Categories,
+            xAxisTitle = XAxisTitle,
+            yAxisTitle = YAxisTitle,
+            showLegend = ShowLegend,
+            series = Series.Select(s => new
+            {
+                name = s.Name,
+                type = s.Type,
+                data = s.Data
+            }).ToList()
+        };
+    }
+}
