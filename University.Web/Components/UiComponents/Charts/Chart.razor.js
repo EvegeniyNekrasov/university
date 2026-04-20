@@ -9,9 +9,13 @@ function buildOptions(options) {
         title: {
             text: options.title ?? null,
         },
+        subtitle: {
+            text: options.subtitle ?? null,
+        },
         credits: {
             enabled: false,
         },
+        colors: options.colors ?? undefined,
         legend: {
             enabled: options.showLegend ?? true,
         },
@@ -20,15 +24,36 @@ function buildOptions(options) {
             title: {
                 text: options.xAxisTitle ?? null,
             },
+            labels: {
+                rotation: options.xAxisLabelsRotation ?? 0,
+            },
         },
         yAxis: {
+            min: options.yAxisMin ?? undefined,
+            max: options.yAxisMax ?? undefined,
             title: {
                 text: options.yAxisTitle ?? null,
+            },
+        },
+        tooltip: {
+            pointFormat: options.tooltipPointFormat ?? undefined,
+            valuePrefix: options.tooltipValuePrefix ?? undefined,
+            valueSuffix: options.tooltipValueSuffix ?? undefined,
+        },
+        plotOptions: {
+            series: {
+                stacking: options.stacking ?? null,
+                dataLabels: {
+                    enabled: options.enableDataLabels ?? false,
+                },
             },
         },
         series: (options.series ?? []).map((s) => ({
             name: s.name,
             type: s.type ?? options.type ?? "line",
+            stack: s.stack ?? undefined,
+            color: s.color ?? undefined,
+            visible: s.visible ?? undefined,
             data: s.data ?? [],
         })),
     };
@@ -36,7 +61,6 @@ function buildOptions(options) {
 
 export function render(containerId, options) {
     destroy(containerId);
-
     const chart = Highcharts.chart(containerId, buildOptions(options));
     charts.set(containerId, chart);
 }
@@ -54,7 +78,6 @@ export function update(containerId, options) {
 
 export function destroy(containerId) {
     const chart = charts.get(containerId);
-
     if (chart) {
         chart.destroy();
         charts.delete(containerId);

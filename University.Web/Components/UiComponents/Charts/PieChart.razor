@@ -1,32 +1,38 @@
 @inherits HighchartsComponentBase
 
-<div id="@ContainerId" class="@Class" style="width:100%; height:@Height;"></div>
+<div id="@ContainerId" class="@Class" style="width:100%; height:@ResolvedHeight;"></div>
 
 @code {
     [Parameter] public string? Title { get; set; }
-    [Parameter] public string Height { get; set; } = "400px";
     [Parameter] public string? Class { get; set; }
 
     [Parameter] public string SeriesName { get; set; } = "Datos";
     [Parameter] public IReadOnlyList<PiePoint> Data { get; set; } = [];
 
-    [Parameter] public bool ShowLegend { get; set; } = true;
-    [Parameter] public bool ShowDataLabels { get; set; } = true;
-    [Parameter] public string? InnerSize { get; set; } // "0%" normal, "60%" donut
-    [Parameter] public string? ValueSuffix { get; set; } // "%", "€", etc.
+    [Parameter] public PieChartOptions Options { get; set; } = new();
 
+    private string ResolvedHeight => Options?.Height ?? "400px";
     protected override string ModulePath => "./Components/UiComponents/Charts/PieChart.razor.js";
 
     protected override object BuildConfig()
     {
+        var options = Options ?? new PieChartOptions();
+
         return new
         {
             title = Title,
-            heightPx = ParseHeightPx(Height),
-            showLegend = ShowLegend,
-            showDataLabels = ShowDataLabels,
-            innerSize = InnerSize,
-            valueSuffix = ValueSuffix,
+            subtitle = options.Subtitle,
+            heightPx = ParseHeightPx(options.Height),
+            showLegend = options.ShowLegend,
+            showDataLabels = options.ShowDataLabels,
+            innerSize = options.InnerSize,
+
+            tooltipPointFormat = options.TooltipPointFormat,
+            tooltipValuePrefix = options.TooltipValuePrefix,
+            tooltipValueSuffix = options.TooltipValueSuffix,
+
+            colors = options.Colors,
+
             series = new
             {
                 name = SeriesName,
@@ -35,7 +41,8 @@
                     name = p.Name,
                     y = p.Y,
                     sliced = p.Sliced,
-                    selected = p.Selected
+                    selected = p.Selected,
+                    color = p.Color
                 }).ToList()
             }
         };

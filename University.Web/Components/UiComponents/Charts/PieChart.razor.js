@@ -9,16 +9,21 @@ function buildOptions(options) {
         title: {
             text: options.title ?? null,
         },
+        subtitle: {
+            text: options.subtitle ?? null,
+        },
         credits: {
             enabled: false,
         },
+        colors: options.colors ?? undefined,
         legend: {
             enabled: options.showLegend ?? true,
         },
         tooltip: {
-            pointFormat: options.valueSuffix
-                ? `<b>{point.y}${options.valueSuffix}</b>`
-                : "<b>{point.y}</b>",
+            pointFormat:
+                options.tooltipPointFormat ?? "<b>{point.name}</b>: {point.y}",
+            valuePrefix: options.tooltipValuePrefix ?? undefined,
+            valueSuffix: options.tooltipValueSuffix ?? undefined,
         },
         plotOptions: {
             pie: {
@@ -27,9 +32,7 @@ function buildOptions(options) {
                 innerSize: options.innerSize ?? undefined,
                 dataLabels: {
                     enabled: options.showDataLabels ?? true,
-                    format: options.valueSuffix
-                        ? "<b>{point.name}</b>: {point.y}" + options.valueSuffix
-                        : "<b>{point.name}</b>: {point.y}",
+                    format: "<b>{point.name}</b>: {point.percentage:.1f}%",
                 },
                 showInLegend: options.showLegend ?? true,
             },
@@ -46,7 +49,6 @@ function buildOptions(options) {
 
 export function render(containerId, options) {
     destroy(containerId);
-
     const chart = Highcharts.chart(containerId, buildOptions(options));
     charts.set(containerId, chart);
 }
@@ -64,7 +66,6 @@ export function update(containerId, options) {
 
 export function destroy(containerId) {
     const chart = charts.get(containerId);
-
     if (chart) {
         chart.destroy();
         charts.delete(containerId);

@@ -11,55 +11,69 @@ this is my university app
 
 <MudAvatar Color="Color.Primary">M</MudAvatar>
 
-<PieChart Title="Distribución" Data="@_marketShare" InnerSize="60%" ValueSuffix="%" SeriesName="Canales" />
+<PieChart Title="Distribución de tráfico" SeriesName="Canales" Data="@data" Options="@options3" />
 
-<StockChart Title="Comparativa" Height="450px" Series="@series" YAxisTitle="Precio" />
+<Chart Title="Ventas por canal" Categories="@months" Series="@series" Options="@options" />
 
-<Chart Title="Ingresos" Type="column" Categories="@months" Series="@series2" YAxisTitle="€" />
+<Chart Title="Mix de canales" Categories="@months" Series="@series" Options="@options2" />
 
 @code {
-    private readonly List<PiePoint> _marketShare =
-    [
-        new() { Name = "Apple", Y = 32.5m, Sliced = true, Selected = true },
-        new() { Name = "Samsung", Y = 27.1m },
-        new() { Name = "Xiaomi", Y = 14.3m },
-        new() { Name = "Oppo", Y = 9.8m },
-        new() { Name = "Otros", Y = 16.3m }
-    ];
-
     private readonly List<string> months = ["Ene", "Feb", "Mar", "Abr"];
+    private readonly University.Web.Components.UiComponents.Charts.PieChartOptions options3 = new()
+    {
+        Height = "420px",
+        InnerSize = "60%",
+        ShowLegend = true,
+        ShowDataLabels = true,
+        TooltipValueSuffix = "%",
+        Colors = ["#3b82f6", "#10b981", "#f59e0b", "#ef4444"]
+    };
 
-    private readonly List<ChartSeries> series2 =
+    private readonly List<PiePoint> data =
     [
-        new()
-        {
-            Name = "2026",
-            Data = [120m, 150m, 170m, 160m]
-        }
+        new() { Name = "Orgánico", Y = 42m, Sliced = true, Selected = true },
+        new() { Name = "Pago", Y = 26m },
+        new() { Name = "Social", Y = 18m },
+        new() { Name = "Referral", Y = 14m }
     ];
-    private readonly List<StockSeries> series =
+    private readonly University.Web.Components.UiComponents.Charts.ChartOptions options = new()
+    {
+        Type = "column",
+        Height = "420px",
+        Subtitle = "Stacked normal",
+        YAxisTitle = "€",
+        Stacking = ChartStackingMode.Normal,
+        EnableDataLabels = true,
+        TooltipValuePrefix = "€"
+    };
+
+    private readonly University.Web.Components.UiComponents.Charts.ChartOptions options2 = new()
+    {
+        Type = "column",
+        Height = "420px",
+        Subtitle = "Stacked percent",
+        YAxisTitle = "%",
+        Stacking = ChartStackingMode.Percent,
+        EnableDataLabels = true,
+        TooltipValueSuffix = "%"
+    };
+
+    private readonly List<ChartSeries> series =
     [
         new()
         {
-            Name = "Serie A",
-            Type = "line",
-            Data =
-            [
-                new StockPoint(DateTimeOffset.Parse("2026-04-14").ToUnixTimeMilliseconds(), 10m),
-                new StockPoint(DateTimeOffset.Parse("2026-04-15").ToUnixTimeMilliseconds(), 12m),
-                new StockPoint(DateTimeOffset.Parse("2026-04-16").ToUnixTimeMilliseconds(), 11m),
-            ]
+            Name = "Retail",
+            Stack = "ventas",
+            Data = [120m, 140m, 160m, 155m],
+            Color = "red"
         },
         new()
         {
-            Name = "Serie B",
-            Type = "area",
-            Data =
-            [
-                new StockPoint(DateTimeOffset.Parse("2026-04-14").ToUnixTimeMilliseconds(), 8m),
-                new StockPoint(DateTimeOffset.Parse("2026-04-15").ToUnixTimeMilliseconds(), 9m),
-                new StockPoint(DateTimeOffset.Parse("2026-04-16").ToUnixTimeMilliseconds(), 13m),
-            ]
+            Name = "Online",
+            Stack = "ventas",
+            Data = [80m, 95m, 110m, 130m],
+            Color = "blue"
         }
     ];
+
 }

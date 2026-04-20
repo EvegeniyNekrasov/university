@@ -58,6 +58,14 @@ public abstract class HighchartsComponentBase : ComponentBase, IAsyncDisposable
         return DEFAULT_CHART_HEIGHT;
     }
 
+    protected static string? ToHighchartsStacking(ChartStackingMode mode) => mode switch
+    {
+        ChartStackingMode.Normal => "normal",
+        ChartStackingMode.Percent => "percent",
+        _ => null
+    };
+
+
     public async ValueTask DisposeAsync()
     {
         if (_module is null)

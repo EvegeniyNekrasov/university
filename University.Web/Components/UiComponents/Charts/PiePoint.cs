@@ -6,4 +6,5 @@ public sealed class PiePoint
     public decimal Y { get; set; }
     public bool? Sliced { get; set; }
     public bool? Selected { get; set; }
+    public string? Color { get; set; }
 }
