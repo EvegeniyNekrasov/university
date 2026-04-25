@@ -13,5 +13,24 @@ services:
       - postgres_data:/var/lib/postgresql
     shm_size: 128mb
 
+  docs:
+    build:
+      context: ../Docs
+      dockerfile: Dockerfile
+    container_name: universidad-docs
+    restart: unless-stopped
+    working_dir: /docs
+    command: serve --dev-addr=0.0.0.0:8000
+    ports:
+      - "8001:8000"
+    volumes:
+      - ../Docs:/docs
+    networks:
+      - universidad-docs
+
 volumes:
   postgres_data:
+
+networks:
+  universidad-docs:
+    driver: bridge

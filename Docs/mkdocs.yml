@@ -1,0 +1,66 @@
+site_name: Documentación del Proyecto
+site_description: Documentación técnica del proyecto
+site_author: Equipo de Desarrollo
+
+theme:
+  name: material
+  language: es
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - navigation.expand
+    - navigation.path
+    - navigation.indexes
+    - toc.follow
+    - toc.integrate
+    - content.code.copy
+    - content.code.select
+    - content.tabs.link
+    - search.suggest
+    - search.highlight
+
+plugins:
+  - search
+
+markdown_extensions:
+  - admonition
+  - toc:
+      permalink: true
+  - tables
+  - attr_list
+  - md_in_html
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.superfences
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.details
+
+nav:
+  - Inicio: index.md
+
+  - Primeros pasos:
+      - Resumen: getting-started/overview.md
+      - Instalación: getting-started/installation.md
+      - Uso rápido: getting-started/quick-start.md
+
+  - Componentes:
+      - Table:
+          - Resumen: components/table/index.md
+          - Uso: components/table/usage.md
+          - Columnas: components/table/columns.md
+          - Filtros: components/table/filters.md
+          - SearchPanes: components/table/search-panes.md
+          - Server-side: components/table/server-side.md
+          - Exportación: components/table/export.md
+          - Persistencia: components/table/state-persistence.md
+          - Seguridad: components/table/security.md
+          - Rendimiento: components/table/performance.md
+          - Ejemplos: components/table/examples.md
+          - Troubleshooting: components/table/troubleshooting.md
+
+  - Arquitectura:
+      - Estructura del proyecto: architecture/project-structure.md
+      - Patrones de componentes: architecture/component-patterns.md
+
+  - Changelog: changelog.md
