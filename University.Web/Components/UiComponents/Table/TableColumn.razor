@@ -1,0 +1,106 @@
+@typeparam TItem
+@implements IDisposable
+@using System.Globalization
+
+@code {
+    [CascadingParameter]
+    internal Table<TItem>? Owner { get; set; }
+
+    [Parameter]
+    public string? Key { get; set; }
+
+    [Parameter, EditorRequired]
+    public string Title { get; set; } = string.Empty;
+
+    [Parameter, EditorRequired]
+    public Func<TItem, object?> Value { get; set; } = default!;
+
+    [Parameter]
+    public RenderFragment<TItem>? Template { get; set; }
+
+    [Parameter]
+    public bool Sortable { get; set; } = true;
+
+    [Parameter]
+    public bool Filterable { get; set; } = true;
+
+    [Parameter]
+    public bool ShowColumnFilter { get; set; } = true;
+
+    [Parameter]
+    public TableFilterType FilterType { get; set; } = TableFilterType.Text;
+
+    [Parameter]
+    public IReadOnlyList<TableFilterOption>? FilterOptions { get; set; }
+
+    [Parameter]
+    public string? ColumnFilterPlaceholder { get; set; }
+
+    [Parameter]
+    public bool Visible { get; set; } = true;
+
+    [Parameter]
+    public string? CssClass { get; set; }
+
+    [Parameter]
+    public string? HeaderCssClass { get; set; }
+
+    // null = automático según threshold
+    // true = forzar SearchPane
+    // false = ocultar SearchPane
+    [Parameter]
+    public bool? SearchPane { get; set; }
+
+    [Parameter]
+    public string? SearchPaneTitle { get; set; }
+
+    [Parameter]
+    public double? SearchPaneThreshold { get; set; }
+
+    [Parameter]
+    public Func<TItem, string>? SearchPaneValue { get; set; }
+
+    [Parameter]
+    public bool Exportable { get; set; } = true;
+
+    [Parameter]
+    public Func<TItem, object?>? ExportValue { get; set; }
+
+    internal string EffectiveKey => !string.IsNullOrWhiteSpace(Key)
+        ? Key!
+        : Title;
+
+    protected override void OnInitialized()
+    {
+        Owner?.AddColumn(this);
+    }
+
+    internal object? SortValue(TItem item)
+    {
+        return Value.Invoke(item);
+    }
+
+    internal string TextValue(TItem item)
+    {
+        return Convert.ToString(Value.Invoke(item), CultureInfo.CurrentCulture) ?? string.Empty;
+    }
+
+    internal string SearchPaneTextValue(TItem item)
+    {
+        return SearchPaneValue?.Invoke(item) ?? TextValue(item);
+    }
+
+    internal string ExportTextValue(TItem item)
+    {
+        var value = ExportValue is not null
+            ? ExportValue.Invoke(item)
+            : Value.Invoke(item);
+
+        return Convert.ToString(value, CultureInfo.CurrentCulture) ?? string.Empty;
+    }
+
+    public void Dispose()
+    {
+        Owner?.RemoveColumn(this);
+    }
+}

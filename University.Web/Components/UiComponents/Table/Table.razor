@@ -1,0 +1,472 @@
+@typeparam TItem
+@implements IAsyncDisposable
+@using System.Globalization
+@using System.Text
+@using System.Text.Json
+@using Microsoft.AspNetCore.Components.Web
+@using Microsoft.JSInterop
+@inject IJSRuntime JS
+
+<CascadingValue Value="this" IsFixed="true">
+    @ChildContent
+</CascadingValue>
+
+@if (!_columns.Any())
+{
+    <div class="dt-empty-state">
+        Define al menos una columna usando <code>&lt;TableColumn /&gt;</code>.
+    </div>
+}
+else
+{
+    var visibleColumns = VisibleColumns;
+    
+    var searchPanes = GetSearchPanes(visibleColumns);
+
+    var view = CreateView(visibleColumns);
+
+    var showColumnFilterRow = ShouldShowColumnFilterRow(visibleColumns);
+
+    var tableWrapClass =
+        $"dt-table-wrap {(StickyHeader ? "dt-sticky" : "")} {(ResponsiveCards ? "dt-responsive-cards" : "")}";
+
+    var tableWrapStyle = GetTableWrapStyle();
+
+    <section class="dt-card" role="region" aria-label="@(Title ?? "Tabla de datos")">
+        <div class="dt-toolbar">
+            <div>
+                @if (!string.IsNullOrWhiteSpace(Title))
+                {
+                    <h3 class="dt-title">@Title</h3>
+                }
+
+                <p class="dt-subtitle">
+                    @if (IsBusy)
+                    {
+                        <span>Cargando datos...</span>
+                    }
+                    else
+                    {
+                        <span>@view.TotalItems resultado@(view.TotalItems == 1 ? "" : "s")</span>
+                    }
+                </p>
+            </div>
+
+            <div class="dt-actions">
+                @ToolbarActions
+
+                @if (EnableGlobalSearch)
+                {
+                    <div class="dt-search-wrap">
+                        <span class="dt-search-icon">⌕</span>
+                        <input class="dt-input dt-search" placeholder="@GlobalSearchPlaceholder" value="@_searchText"
+                               disabled="@IsBusy" aria-label="Buscar en la tabla" @oninput="OnSearchChanged" />
+                    </div>
+                }
+
+                @if (ShowPageSizeSelector)
+                {
+                    <select class="dt-select" value="@_pageSize" disabled="@IsBusy" aria-label="Tamaño de página"
+                            @onchange="OnPageSizeChanged">
+                        @foreach (var size in PageSizeOptions)
+                        {
+                            <option value="@size">@size por página</option>
+                        }
+                    </select>
+                }
+
+                @if (ShowColumnVisibilityButton)
+                {
+                    <div class="dt-dropdown">
+                        <button type="button" class="dt-btn dt-btn-light" aria-expanded="@_showColumnMenu"
+                                @onclick="ToggleColumnMenu">
+                            Columnas
+                        </button>
+
+                        @if (_showColumnMenu)
+                        {
+                            <div class="dt-dropdown-menu" role="menu">
+                                @foreach (var column in _columns.Where(c => c.Visible))
+                                {
+                                    <label class="dt-check-line">
+                                        <input type="checkbox" checked="@IsColumnShown(column)"
+                                               @onchange="e => SetColumnShownAsync(column, IsChecked(e))" />
+                                        <span>@column.Title</span>
+                                    </label>
+                                }
+                            </div>
+                        }
+                    </div>
+                }
+
+                @if (ShowExportButton)
+                {
+                    <button type="button" class="dt-btn dt-btn-success" disabled="@IsBusy"
+                            @onclick="() => ExportCsvAsync(visibleColumns, view.Rows)">
+                        Exportar CSV
+                    </button>
+                }
+
+                <button type="button" class="dt-btn dt-btn-dark" disabled="@IsBusy" @onclick="ClearAllAsync">
+                    Limpiar
+                </button>
+            </div>
+        </div>
+
+        @if (EnableSearchPanes && searchPanes.Any())
+        {
+            <div class="dt-panes">
+                <div class="dt-panes-header">
+                    <div>
+                        <h4 class="dt-panes-title">@SearchPanesTitle</h4>
+                        <p class="dt-panes-subtitle">
+                            @SelectedSearchPaneCount selección@(SelectedSearchPaneCount == 1 ? "" : "es")
+                            activa@(SelectedSearchPaneCount == 1 ? "" : "s")
+                        </p>
+                    </div>
+
+                    <div class="dt-panes-actions">
+                        <button type="button" class="dt-btn dt-btn-light" @onclick="ToggleSearchPanesAsync">
+                            @(_searchPanesCollapsed ? "Mostrar paneles" : "Ocultar paneles")
+                        </button>
+
+                        <button type="button" class="dt-btn dt-btn-light"
+                                disabled="@(SelectedSearchPaneCount == 0 && SearchPaneSearchCount == 0)"
+                                @onclick="ClearSearchPanesAsync">
+                            Limpiar paneles
+                        </button>
+                    </div>
+                </div>
+
+                @if (!_searchPanesCollapsed)
+                {
+                    <div class="dt-pane-grid" style="@($"--dt-pane-columns:{SearchPanesColumns}")">
+                        @foreach (var pane in searchPanes)
+                        {
+                            <article class="dt-pane">
+                                <div class="dt-pane-head">
+                                    <div>
+                                        <strong>@pane.Title</strong>
+
+                                        @if (pane.SelectedCount > 0)
+                                        {
+                                            <span>@pane.SelectedCount seleccionado@(pane.SelectedCount == 1 ? "" : "s")</span>
+                                        }
+                                    </div>
+                                </div>
+
+                                @if (EnableSearchPaneSearch)
+                                {
+                                    <div class="dt-pane-search-wrap">
+                                        <span>⌕</span>
+                                        <input class="dt-pane-search" placeholder="Buscar en @pane.Title..."
+                                               value="@GetSearchPaneSearchText(pane.ColumnKey)" aria-label="Buscar opciones en @pane.Title"
+                                               @oninput="e => SetSearchPaneSearchTextAsync(pane.ColumnKey, e.Value?.ToString() ?? string.Empty)" />
+                                    </div>
+                                }
+
+                                @if (!pane.Options.Any())
+                                {
+                                    <div class="dt-pane-empty">Sin opciones</div>
+                                }
+                                else
+                                {
+                                    <div class="dt-pane-options">
+                                        @foreach (var option in pane.Options)
+                                        {
+                                            <button type="button" class="dt-pane-option @(option.Selected ? "selected" : "")"
+                                                    aria-pressed="@option.Selected" title="@option.Label"
+                                                    @onclick="() => ToggleSearchPaneValueAsync(pane.ColumnKey, option.Value)">
+                                                <span class="dt-pane-label">@option.Label</span>
+
+                                                @if (SearchPanesViewTotal)
+                                                {
+                                                    <span class="dt-pane-count" title="Visibles / total">
+                                                        @option.VisibleCount / @option.TotalCount
+                                                    </span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="dt-pane-count">@option.TotalCount</span>
+                                                }
+                                            </button>
+                                        }
+                                    </div>
+                                }
+                            </article>
+                        }
+                    </div>
+                }
+            </div>
+        }
+
+        @if (ShowSelection && SelectedRowCount > 0)
+        {
+            <div class="dt-selection-bar" aria-live="polite">
+                <span>
+                    <strong>@SelectedRowCount</strong>
+                    fila@(SelectedRowCount == 1 ? "" : "s") seleccionada@(SelectedRowCount == 1 ? "" : "s")
+                </span>
+
+                <button type="button" class="dt-btn dt-btn-light dt-btn-sm" @onclick="ClearSelectionAsync">
+                    Quitar selección
+                </button>
+            </div>
+        }
+
+        <div class="@tableWrapClass" style="@tableWrapStyle">
+            <table class="dt-table">
+                <thead>
+                    <tr>
+                        @if (ShowSelection)
+                        {
+                            <th class="dt-select-col">
+                                <input type="checkbox" checked="@IsAllPageSelected(view.Rows)"
+                                       disabled="@(!view.Rows.Any() || IsBusy)" aria-label="Seleccionar página actual"
+                                       @onclick="IgnoreClick" @onclick:stopPropagation="true"
+                                       @onchange="e => SetPageSelectionAsync(view.Rows, IsChecked(e))" />
+                            </th>
+                        }
+
+                        @if (HasExpandableRows)
+                        {
+                            <th class="dt-expand-col">@ExpandColumnHeader</th>
+                        }
+
+                        @foreach (var column in visibleColumns)
+                        {
+                            <th class="@column.HeaderCssClass" aria-sort="@GetAriaSort(column)">
+                                <button type="button" class="dt-th-button @(column.Sortable ? "" : "disabled")"
+                                        disabled="@(!column.Sortable || IsBusy)" @onclick="args => ToggleSortAsync(column, args)">
+                                    <span>@column.Title</span>
+                                    <span class="dt-sort">@GetSortIcon(column)</span>
+                                </button>
+                            </th>
+                        }
+
+                        @if (HasRowActions)
+                        {
+                            <th class="dt-actions-col">Acciones</th>
+                        }
+                    </tr>
+
+                    @if (showColumnFilterRow)
+                    {
+                        <tr class="dt-filter-row">
+                            @if (ShowSelection)
+                            {
+                                <th></th>
+                            }
+
+                            @if (HasExpandableRows)
+                            {
+                                <th></th>
+                            }
+
+                            @foreach (var column in visibleColumns)
+                            {
+                                <th>
+                                    @if (EnableColumnFilters && column.Filterable && column.ShowColumnFilter)
+                                    {
+                                        @switch (column.FilterType)
+                                        {
+                                            case TableFilterType.Select:
+                                                <select class="dt-filter" value="@GetColumnFilterValue(column.EffectiveKey)" disabled="@IsBusy"
+                                                        @onchange="e => SetColumnFilterValueAsync(column.EffectiveKey, column.FilterType, e.Value?.ToString())">
+                                                    <option value="">Todos</option>
+                                                    @foreach (var option in GetFilterOptions(column))
+                                                    {
+                                                        <option value="@option.Value">@option.Text</option>
+                                                    }
+                                                </select>
+                                                break;
+
+                                            case TableFilterType.Boolean:
+                                                <select class="dt-filter" value="@GetColumnFilterValue(column.EffectiveKey)" disabled="@IsBusy"
+                                                        @onchange="e => SetColumnFilterValueAsync(column.EffectiveKey, column.FilterType, e.Value?.ToString())">
+                                                    <option value="">Todos</option>
+                                                    <option value="true">Sí</option>
+                                                    <option value="false">No</option>
+                                                </select>
+                                                break;
+
+                                            case TableFilterType.Date:
+                                                <input class="dt-filter" type="date" value="@GetColumnFilterValue(column.EffectiveKey)"
+                                                       disabled="@IsBusy"
+                                                       @oninput="e => SetColumnFilterValueAsync(column.EffectiveKey, column.FilterType, e.Value?.ToString())" />
+                                                break;
+
+                                            case TableFilterType.DateRange:
+                                                <div class="dt-range-filter">
+                                                    <input class="dt-filter" type="date" value="@GetColumnFilterFrom(column.EffectiveKey)"
+                                                           disabled="@IsBusy"
+                                                           @oninput="e => SetColumnFilterFromAsync(column.EffectiveKey, column.FilterType, e.Value?.ToString())" />
+
+                                                    <input class="dt-filter" type="date" value="@GetColumnFilterTo(column.EffectiveKey)"
+                                                           disabled="@IsBusy"
+                                                           @oninput="e => SetColumnFilterToAsync(column.EffectiveKey, column.FilterType, e.Value?.ToString())" />
+                                                </div>
+                                                break;
+
+                                            case TableFilterType.Number:
+                                                <input class="dt-filter" type="number"
+                                                       placeholder="@(column.ColumnFilterPlaceholder ?? $"Filtrar {column.Title}")"
+                                                       value="@GetColumnFilterValue(column.EffectiveKey)" disabled="@IsBusy"
+                                                       @oninput="e => SetColumnFilterValueAsync(column.EffectiveKey, column.FilterType, e.Value?.ToString())" />
+                                                break;
+
+                                            case TableFilterType.NumberRange:
+                                                <div class="dt-range-filter">
+                                                    <input class="dt-filter" type="number" placeholder="Min"
+                                                           value="@GetColumnFilterFrom(column.EffectiveKey)" disabled="@IsBusy"
+                                                           @oninput="e => SetColumnFilterFromAsync(column.EffectiveKey, column.FilterType, e.Value?.ToString())" />
+
+                                                    <input class="dt-filter" type="number" placeholder="Max"
+                                                           value="@GetColumnFilterTo(column.EffectiveKey)" disabled="@IsBusy"
+                                                           @oninput="e => SetColumnFilterToAsync(column.EffectiveKey, column.FilterType, e.Value?.ToString())" />
+                                                </div>
+                                                break;
+
+                                            default:
+                                                <input class="dt-filter"
+                                                       placeholder="@(column.ColumnFilterPlaceholder ?? $"Filtrar {column.Title}")"
+                                                       value="@GetColumnFilterValue(column.EffectiveKey)" disabled="@IsBusy"
+                                                       @oninput="e => SetColumnFilterValueAsync(column.EffectiveKey, column.FilterType, e.Value?.ToString())" />
+                                                break;
+                                        }
+                                    }
+                                </th>
+                            }
+
+                            @if (HasRowActions)
+                            {
+                                <th></th>
+                            }
+                        </tr>
+                    }
+                </thead>
+
+                <tbody>
+                    @if (IsBusy)
+                    {
+                        @for (var i = 0; i < LoadingRows; i++)
+                        {
+                            <tr>
+                                <td colspan="@GetColumnSpan(visibleColumns)">
+                                    <div class="dt-skeleton"></div>
+                                </td>
+                            </tr>
+                        }
+                    }
+                    else if (!view.Rows.Any())
+                    {
+                        <tr>
+                            <td class="dt-empty" colspan="@GetColumnSpan(visibleColumns)">
+                                @if (EmptyTemplate is not null)
+                                {
+                                    @EmptyTemplate
+                                }
+                                else
+                                {
+                                    @EmptyText
+                                }
+                            </td>
+                        </tr>
+                    }
+                    else
+                    {
+                        @foreach (var item in view.Rows)
+                        {
+                            var canExpand = CanExpandRow(item);
+                            var isExpanded = IsRowExpanded(item);
+
+                            <tr @key="GetRowKey(item)" class="@GetRowClass(item)" aria-selected="@IsRowSelected(item)"
+                                @onclick="() => HandleRowClickAsync(item)">
+                                @if (ShowSelection)
+                                {
+                                    <td class="dt-select-col" data-label="Seleccionar">
+                                        <input type="checkbox" checked="@IsRowSelected(item)" aria-label="Seleccionar fila"
+                                               @onclick="IgnoreClick" @onclick:stopPropagation="true"
+                                               @onchange="async _ => await ToggleRowSelectionAsync(item)" />
+                                    </td>
+                                }
+
+                                @if (HasExpandableRows)
+                                {
+                                    <td class="dt-expand-col" data-label="Detalle">
+                                        @if (canExpand)
+                                        {
+                                            <button type="button" class="dt-expand-btn @(isExpanded ? "expanded" : "")"
+                                                    title="@(isExpanded ? "Contraer" : "Expandir")" aria-expanded="@isExpanded"
+                                                    @onclick="() => ToggleRowExpanded(item)" @onclick:stopPropagation="true">
+                                                @(isExpanded ? "−" : "+")
+                                            </button>
+                                        }
+                                    </td>
+                                }
+
+                                @foreach (var column in visibleColumns)
+                                {
+                                    <td class="@column.CssClass" data-label="@column.Title">
+                                        @if (column.Template is not null)
+                                        {
+                                            @column.Template(item)
+                                        }
+                                        else
+                                        {
+                                            @column.TextValue(item)
+                                        }
+                                    </td>
+                                }
+
+                                @if (HasRowActions)
+                                {
+                                    <td class="dt-actions-col" data-label="Acciones" @onclick="IgnoreClick"
+                                        @onclick:stopPropagation="true">
+                                        @RowActions!(item)
+                                    </td>
+                                }
+                            </tr>
+
+                            @if (HasExpandableRows && isExpanded)
+                            {
+                                <tr class="dt-details-row">
+                                    <td colspan="@GetColumnSpan(visibleColumns)">
+                                        <div class="dt-details-panel">
+                                            @RowDetails!(item)
+                                        </div>
+                                    </td>
+                                </tr>
+                            }
+                        }
+                    }
+                </tbody>
+            </table>
+        </div>
+
+        <div class="dt-footer">
+            <div class="dt-range">
+                @if (IsBusy)
+                {
+                    <span>Cargando...</span>
+                }
+                else
+                {
+                    <span>Mostrando @view.Start - @view.End de @view.TotalItems</span>
+                }
+            </div>
+
+            <div class="dt-pager">
+                <button type="button" class="dt-page-button" disabled="@(view.CurrentPage == 1 || IsBusy)"
+                        @onclick="() => GoToPageAsync(1)">«</button>
+                <button type="button" class="dt-page-button" disabled="@(view.CurrentPage == 1 || IsBusy)"
+                        @onclick="() => GoToPageAsync(view.CurrentPage - 1)">‹</button>
+                <span class="dt-page-info">Página @view.CurrentPage de @view.TotalPages</span>
+                <button type="button" class="dt-page-button" disabled="@(view.CurrentPage == view.TotalPages || IsBusy)"
+                        @onclick="() => GoToPageAsync(view.CurrentPage + 1)">›</button>
+                <button type="button" class="dt-page-button" disabled="@(view.CurrentPage == view.TotalPages || IsBusy)"
+                        @onclick="() => GoToPageAsync(view.TotalPages)">»</button>
+            </div>
+        </div>
+    </section>
+}
