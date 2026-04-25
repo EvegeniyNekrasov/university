@@ -7,7 +7,7 @@ using Microsoft.JSInterop;
 
 namespace University.Web.Components.UiComponents.Table;
 
-public partial class Table<TItem>
+public partial class Table<TItem> : ComponentBase, IAsyncDisposable
 {
     #region Parameters
 
@@ -167,6 +167,9 @@ public partial class Table<TItem>
     [Parameter]
     public string StateKey { get; set; } = "table-state";
 
+    [Parameter]
+    public bool RecalculateSearchPanesOnSearch { get; set; } = false;
+
     #endregion
 
     private readonly List<TableColumn<TItem>> _columns = [];
@@ -184,6 +187,7 @@ public partial class Table<TItem>
     private bool _serverLoading;
 
     private string _searchText = string.Empty;
+    private string _searchInputText = string.Empty;
     private int _pageSize;
     private int _currentPage = 1;
     private bool _searchPanesCollapsed;
@@ -191,8 +195,28 @@ public partial class Table<TItem>
     private IJSObjectReference? _jsModule;
     private CancellationTokenSource? _debounceCts;
 
-    private IReadOnlyList<TableColumn<TItem>> VisibleColumns =>
-        [.. _columns.Where(c => c.Visible && !_hiddenColumnKeys.Contains(c.EffectiveKey))];
+    private IReadOnlyList<TableColumn<TItem>> AllColumns =>
+        [.. _columns.Where(c => c.Visible)];
+
+    private IReadOnlyList<TableColumn<TItem>> TableColumns =>
+        [.. AllColumns.Where(c => !IsColumnHidden(c))];
+
+    private IReadOnlyList<TableColumn<TItem>> GlobalSearchColumns =>
+        [.. AllColumns.Where(c => !IsColumnHidden(c) || c.SearchableWhenHidden)];
+
+    private IReadOnlyList<TableColumn<TItem>> FilterColumns =>
+        [.. AllColumns.Where(c => !IsColumnHidden(c) || c.FilterableWhenHidden)];
+
+    private IReadOnlyList<TableColumn<TItem>> SearchPaneColumns =>
+        [.. AllColumns.Where(c => !IsColumnHidden(c) || c.SearchPaneWhenHidden)];
+
+    private IReadOnlyList<TableColumn<TItem>> SortColumns =>
+        AllColumns;
+
+    private bool IsColumnHidden(TableColumn<TItem> column)
+    {
+        return _hiddenColumnKeys.Contains(column.EffectiveKey);
+    }
 
     private bool HasExpandableRows => RowDetails is not null;
     private bool HasRowActions => RowActions is not null;
@@ -247,6 +271,12 @@ public partial class Table<TItem>
         if (!_columns.Contains(column))
         {
             _columns.Add(column);
+
+            if (!column.ShowByDefault)
+            {
+                _hiddenColumnKeys.Add(column.EffectiveKey);
+            }
+
             StateHasChanged();
         }
     }
@@ -264,11 +294,41 @@ public partial class Table<TItem>
         }
     }
 
-    private async Task OnSearchChanged(ChangeEventArgs e)
+    private async Task OnSearchInputChanged(ChangeEventArgs e)
     {
-        _searchText = e.Value?.ToString() ?? string.Empty;
-        _currentPage = 1;
-        await RequestRefreshAsync(debounce: true);
+        var value = e.Value?.ToString() ?? string.Empty;
+
+        // Esto mantiene el texto del input estable.
+        // No lo usamos todavía para filtrar.
+        _searchInputText = value;
+
+        _debounceCts?.Cancel();
+        _debounceCts?.Dispose();
+
+        var cts = new CancellationTokenSource();
+        _debounceCts = cts;
+
+        try
+        {
+            if (SearchDebounceMs > 0)
+            {
+                await Task.Delay(SearchDebounceMs, cts.Token);
+            }
+
+            if (cts.IsCancellationRequested)
+            {
+                return;
+            }
+
+            _searchText = value;
+            _currentPage = 1;
+
+            await RequestRefreshAsync(debounce: false);
+        }
+        catch (TaskCanceledException)
+        {
+            // Ignorado: significa que el usuario siguió escribiendo.
+        }
     }
 
     private async Task OnPageSizeChanged(ChangeEventArgs e)
@@ -569,6 +629,7 @@ public partial class Table<TItem>
 
     private async Task ClearAllAsync()
     {
+        _searchInputText = string.Empty;
         _searchText = string.Empty;
         _columnFilters.Clear();
         _searchPaneSelections.Clear();
@@ -711,7 +772,7 @@ public partial class Table<TItem>
             return new TableView(_serverRows, totalItems, totalPages, currentPage, start, end);
         }
 
-        var rows = ApplyQuery(visibleColumns).ToList();
+        var rows = ApplyQuery().ToList();
         var localTotalItems = rows.Count;
         var localTotalPages = Math.Max(1, (int)Math.Ceiling(localTotalItems / (double)_pageSize));
         var localCurrentPage = Math.Clamp(_currentPage, 1, localTotalPages);
@@ -727,26 +788,24 @@ public partial class Table<TItem>
         return new TableView(pageRows, localTotalItems, localTotalPages, localCurrentPage, localStart, localEnd);
     }
 
-    private IEnumerable<TItem> ApplyQuery(IReadOnlyList<TableColumn<TItem>> visibleColumns)
+    private IEnumerable<TItem> ApplyQuery()
     {
-        IEnumerable<TItem> query = Items ?? [];
+        IEnumerable<TItem> query = Items ?? Enumerable.Empty<TItem>();
 
-        query = ApplyTextFilters(query, visibleColumns);
-        query = ApplySearchPaneSelections(query, visibleColumns);
-        query = ApplySorting(query, visibleColumns);
+        query = ApplyTextFilters(query);
+        query = ApplySearchPaneSelections(query);
+        query = ApplySorting(query);
 
         return query;
     }
 
-    private IEnumerable<TItem> ApplySorting(
-        IEnumerable<TItem> source,
-        IReadOnlyList<TableColumn<TItem>> visibleColumns)
+    private IEnumerable<TItem> ApplySorting(IEnumerable<TItem> source)
     {
         IOrderedEnumerable<TItem>? ordered = null;
 
         foreach (var sort in _sorts.OrderBy(s => s.Priority))
         {
-            var column = visibleColumns.FirstOrDefault(c => c.EffectiveKey == sort.ColumnKey);
+            var column = SortColumns.FirstOrDefault(c => c.EffectiveKey == sort.ColumnKey);
 
             if (column is null)
             {
@@ -765,9 +824,7 @@ public partial class Table<TItem>
         return ordered ?? source;
     }
 
-    private IEnumerable<TItem> ApplyTextFilters(
-        IEnumerable<TItem> source,
-        IReadOnlyList<TableColumn<TItem>> visibleColumns)
+    private IEnumerable<TItem> ApplyTextFilters(IEnumerable<TItem> source)
     {
         IEnumerable<TItem> query = source;
 
@@ -776,14 +833,14 @@ public partial class Table<TItem>
             var search = _searchText.Trim();
 
             query = query.Where(item =>
-                visibleColumns.Any(column =>
+                GlobalSearchColumns.Any(column =>
                     column.Filterable &&
                     column.TextValue(item).Contains(search, StringComparison.CurrentCultureIgnoreCase)));
         }
 
         foreach (var filter in _columnFilters.Values)
         {
-            var column = visibleColumns.FirstOrDefault(c => c.EffectiveKey == filter.ColumnKey);
+            var column = FilterColumns.FirstOrDefault(c => c.EffectiveKey == filter.ColumnKey);
 
             if (column is null)
             {
@@ -952,9 +1009,8 @@ public partial class Table<TItem>
     }
 
     private IEnumerable<TItem> ApplySearchPaneSelections(
-        IEnumerable<TItem> source,
-        IReadOnlyList<TableColumn<TItem>> visibleColumns,
-        string? excludeColumnKey = null)
+    IEnumerable<TItem> source,
+    string? excludeColumnKey = null)
     {
         IEnumerable<TItem> query = source;
 
@@ -965,7 +1021,7 @@ public partial class Table<TItem>
                 continue;
             }
 
-            var column = visibleColumns.FirstOrDefault(c => c.EffectiveKey == selection.Key);
+            var column = SearchPaneColumns.FirstOrDefault(c => c.EffectiveKey == selection.Key);
 
             if (column is null)
             {
@@ -978,7 +1034,7 @@ public partial class Table<TItem>
         return query;
     }
 
-    private IReadOnlyList<TableSearchPane> GetSearchPanes(IReadOnlyList<TableColumn<TItem>> visibleColumns)
+    private IReadOnlyList<TableSearchPane> GetSearchPanes(IReadOnlyList<TableColumn<TItem>> searchPaneColumns)
     {
         if (!EnableSearchPanes)
         {
@@ -987,18 +1043,23 @@ public partial class Table<TItem>
 
         if (ServerSide)
         {
+            var allowedKeys = searchPaneColumns
+                .Select(c => c.EffectiveKey)
+                .ToHashSet(StringComparer.CurrentCultureIgnoreCase);
+
             return [.. _serverSearchPanes
+                .Where(p => allowedKeys.Contains(p.ColumnKey))
                 .Select(ApplyPaneSearch)
                 .Where(pane => pane.Options.Any() || pane.SelectedCount > 0)];
         }
 
-        return CreateClientSearchPaneViews(visibleColumns);
+        return CreateClientSearchPaneViews(searchPaneColumns);
     }
 
     private TableSearchPane ApplyPaneSearch(TableSearchPane pane)
     {
-        var search = GetSearchPaneSearchText(pane.ColumnKey);
-        var selected = GetSelectedSearchPaneValues(pane.ColumnKey);
+        string search = GetSearchPaneSearchText(pane.ColumnKey);
+        HashSet<string> selected = GetSelectedSearchPaneValues(pane.ColumnKey);
 
         var options = pane.Options
             .Where(o => string.IsNullOrWhiteSpace(search) ||
@@ -1013,13 +1074,19 @@ public partial class Table<TItem>
         };
     }
 
-    private IReadOnlyList<TableSearchPane> CreateClientSearchPaneViews(IReadOnlyList<TableColumn<TItem>> visibleColumns)
+    private IReadOnlyList<TableSearchPane> CreateClientSearchPaneViews(IReadOnlyList<TableColumn<TItem>> searchPaneColumns)
     {
-        var baseRows = ApplyTextFilters(Items ?? [], visibleColumns).ToList();
+        IEnumerable<TItem> source = Items ?? [];
 
-        return [.. visibleColumns
+        // Con muchos datos, recalcular los SearchPanes en cada búsqueda global es caro.
+        // Si RecalculateSearchPanesOnSearch=false, los panes se calculan sobre el dataset base.
+        List<TItem> baseRows = RecalculateSearchPanesOnSearch
+            ? [.. ApplyTextFilters(source)]
+            : [.. source];
+
+        return [.. searchPaneColumns
             .Where(column => ShouldShowSearchPane(column, baseRows))
-            .Select(column => CreateClientSearchPaneView(column, visibleColumns, baseRows))
+            .Select(column => CreateClientSearchPaneView(column, searchPaneColumns, baseRows))
             .Where(pane => pane.Options.Any() || pane.SelectedCount > 0)];
     }
 
@@ -1040,14 +1107,14 @@ public partial class Table<TItem>
             return false;
         }
 
-        var threshold = column.SearchPaneThreshold ?? SearchPanesThreshold;
+        double threshold = column.SearchPaneThreshold ?? SearchPanesThreshold;
 
-        var uniqueCount = baseRows
+        int uniqueCount = baseRows
             .Select(column.SearchPaneTextValue)
             .Distinct(StringComparer.CurrentCultureIgnoreCase)
             .Count();
 
-        var ratio = uniqueCount / (double)baseRows.Count;
+        double ratio = uniqueCount / (double)baseRows.Count;
 
         return ratio <= threshold;
     }
@@ -1060,7 +1127,7 @@ public partial class Table<TItem>
         var totalCounts = CountSearchPaneValues(baseRows, column);
 
         var visibleRowsForPane = SearchPanesCascade || SearchPanesViewTotal
-            ? ApplySearchPaneSelections(baseRows, visibleColumns, excludeColumnKey: column.EffectiveKey).ToList()
+            ? [.. ApplySearchPaneSelections(baseRows, excludeColumnKey: column.EffectiveKey)]
             : baseRows;
 
         var visibleCounts = CountSearchPaneValues(visibleRowsForPane, column);
@@ -1274,8 +1341,8 @@ public partial class Table<TItem>
 
         return ExportMode switch
         {
-            TableExportMode.All => (Items ?? Enumerable.Empty<TItem>()).ToList(),
-            _ => ApplyQuery(visibleColumns).ToList()
+            TableExportMode.All => (Items ?? []).ToList(),
+            _ => [.. ApplyQuery()]
         };
     }
 
@@ -1305,7 +1372,7 @@ public partial class Table<TItem>
 
     private TableDataRequest CreateRequest(bool isExport)
     {
-        var visibleColumnKeys = VisibleColumns.Select(c => c.EffectiveKey).ToList();
+        var visibleColumnKeys = TableColumns.Select(c => c.EffectiveKey).ToList();
 
         var filters = _columnFilters.Values
             .Select(f => new TableColumnFilter(f.ColumnKey, f.Type, f.Value, f.From, f.To))
@@ -1393,6 +1460,7 @@ public partial class Table<TItem>
             }
 
             _searchText = state.SearchText ?? string.Empty;
+            _searchInputText = _searchText;
             _pageSize = state.PageSize > 0 ? state.PageSize : InitialPageSize;
             _currentPage = state.CurrentPage > 0 ? state.CurrentPage : 1;
             _searchPanesCollapsed = state.SearchPanesCollapsed;

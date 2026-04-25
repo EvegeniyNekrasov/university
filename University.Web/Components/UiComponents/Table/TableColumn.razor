@@ -6,6 +6,7 @@
     [CascadingParameter]
     internal Table<TItem>? Owner { get; set; }
 
+    
     [Parameter]
     public string? Key { get; set; }
 
@@ -38,6 +39,21 @@
 
     [Parameter]
     public bool Visible { get; set; } = true;
+
+    [Parameter]
+    public bool ShowByDefault { get; set; } = true;
+
+    [Parameter]
+    public bool ShowInColumnVisibilityMenu { get; set; } = true;
+
+    [Parameter]
+    public bool SearchableWhenHidden { get; set; } = true;
+
+    [Parameter]
+    public bool FilterableWhenHidden { get; set; } = true;
+
+    [Parameter]
+    public bool SearchPaneWhenHidden { get; set; } = true;
 
     [Parameter]
     public string? CssClass { get; set; }

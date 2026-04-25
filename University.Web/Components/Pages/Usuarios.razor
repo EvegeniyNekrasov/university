@@ -1,28 +1,27 @@
 @page "/usuarios"
+@using System.Linq.Expressions
 
-<Table TItem="User" Items="Users" Title="Usuarios" RowKey="@(u => u.Id)" EnableSearchPanes="true"
-       EnableSearchPaneSearch="true" SearchPanesCascade="true" SearchPanesViewTotal="true" SearchPanesColumns="3"
-       EnableColumnFilters="true" EnableMultiSort="true" SearchDebounceMs="300" RowsClickable="true"
-       IsRowClickable="@(u => u.IsActive)" OnRowClick="OnUserClicked"
-       RowCssClass="@(u => u.IsActive ? "" : "table-row-disabled")" ExpandOnRowClick="false"
-       AllowMultipleExpandedRows="true" IsRowExpandable="@(u => true)" ShowSelection="false" MultipleSelection="false"
-       SelectedItemsChanged="OnSelectionChanged" SearchPanesInitialCollapsed="false" ShowExportButton="true"
-       CsvFileName="usuarios.csv" ExportMode="TableExportMode.Filtered" ShowColumnVisibilityButton="true"
-       StickyHeader="true" MaxHeight="620px" ResponsiveCards="true" PersistState="true" StateKey="users-table">
+<Table TItem="User" ServerSide="false" Items="Users" SearchPaneProvider="LoadUserSearchPanesAsync"
+       ExportProvider="ExportUsersAsync" SearchDebounceMs="400" RecalculateSearchPanesOnSearch="false"
+       EnableSearchPanes="true" SearchPanesInitialCollapsed="true" EnableMultiSort="true" ShowExportButton="true"
+       CsvFileName="usuarios.csv" ExportMode="TableExportMode.Filtered" RowKey="@(u => u.Id)" RowsClickable="true"
+       OnRowClick="OnUserClicked" ShowSelection="true" MultipleSelection="true" SelectedItemsChanged="OnSelectionChanged"
+       ShowColumnVisibilityButton="true" StickyHeader="true" MaxHeight="650px" ResponsiveCards="true">
 
     <ToolbarActions>
         <button class="btn-mini primary" @onclick="CreateUser">
             Nuevo usuario
         </button>
-        <button class="btn-mini warning" @onclick="@(() => Console.WriteLine("otra cosa"))">
+
+        <button class="btn-mini warning" @onclick="OtraCosa">
             Otra cosa
         </button>
-        <button class="btn-mini secondary" @onclick="@(() => Console.WriteLine("oleee"))">
+
+        <button class="btn-mini secondary" @onclick="Oleee">
             Oleee
         </button>
     </ToolbarActions>
 
-    
     <EmptyTemplate>
         <div>
             <strong>No hay usuarios.</strong>
@@ -51,8 +50,8 @@
         <button class="btn-mini primary" @onclick="() => EditUser(u)">
             Editar
         </button>
-        
-        <button class="btn-mini success" @onclick="() => DeleteUser(u)">
+
+        <button class="btn-mini success" @onclick="() => WarnUser(u)">
             Warning
         </button>
 
@@ -62,11 +61,11 @@
     </RowActions>
 
     <ChildContent>
-        <TableColumn TItem="User" Key="name" Title="Nombre" Value="@(u => u.Name)" SearchPane="false"
-                     ShowColumnFilter="false" ColumnFilterPlaceholder="Buscar nombre..." />
+        <TableColumn TItem="User" Key="name" Title="Nombre" Value="@(u => u.Name)" ShowByDefault="true"
+                     ShowColumnFilter="false" SearchPane="false" />
 
-        <TableColumn TItem="User" Key="email" Title="Email" Value="@(u => u.Email)" SearchPane="false"
-                     ShowColumnFilter="false" />
+        <TableColumn TItem="User" Key="email" Title="Email" Value="@(u => u.Email)" ShowByDefault="false"
+                     SearchPane="false" SearchableWhenHidden="true" FilterableWhenHidden="true" />
 
         <TableColumn TItem="User" Key="role" Title="Rol" Value="@(u => u.Role)" SearchPane="true"
                      FilterType="TableFilterType.Select" FilterOptions="RoleOptions" ShowColumnFilter="false" />
@@ -137,6 +136,21 @@
         color: white;
     }
 
+    .btn-mini.secondary {
+        background: #6c757d;
+        color: white;
+    }
+
+    .btn-mini.success {
+        background: #198754;
+        color: white;
+    }
+
+    .btn-mini.warning {
+        background: #ffc107;
+        color: #212529;
+    }
+
     .btn-mini.danger {
         background: #dc3545;
         color: white;
@@ -157,15 +171,276 @@
         new TableFilterOption("User", "User")
     };
 
-    private List<User> Users = new()
+    private List<User> Users = GenerateUsers(5000);
+
+    private Task<TableDataResult<User>> LoadUsersAsync(TableDataRequest request)
     {
-        new(1, "Ana García", "ana@app.com", "Admin", new DateTime(2024, 1, 12), true, "Tiene permisos completos."),
-        new(2, "Luis Pérez", "luis@app.com", "User", new DateTime(2024, 3, 4), true, "Usuario estándar."),
-        new(3, "Marta López", "marta@app.com", "Manager", new DateTime(2023, 11, 22), false, "Cuenta desactivada temporalmente."),
-        new(4, "Carlos Ruiz", "carlos@app.com", "User", new DateTime(2025, 2, 18), true, "Pendiente de revisar perfil."),
-        new(5, "Lucía Torres", "lucia@app.com", "Manager", new DateTime(2025, 6, 8), true, "Responsable de equipo."),
-        new(6, "Pedro Molina", "pedro@app.com", "User", new DateTime(2024, 9, 2), false, "Sin actividad reciente.")
-    };
+        var query = Users.AsQueryable();
+
+        query = ApplyUserSearch(query, request);
+        query = ApplyUserColumnFilters(query, request);
+        query = ApplyUserSearchPanes(query, request);
+        query = ApplyUserSorting(query, request);
+
+        var total = query.Count();
+
+        var rows = query
+            .Skip((request.Page - 1) * request.PageSize)
+            .Take(request.PageSize)
+            .ToList();
+
+        return Task.FromResult(new TableDataResult<User>(rows, total));
+    }
+
+    private Task<IReadOnlyList<TableSearchPane>> LoadUserSearchPanesAsync(TableDataRequest request)
+    {
+        var panes = new List<TableSearchPane>
+        {
+            BuildPane(
+                request,
+                columnKey: "role",
+                title: "Rol",
+                valueSelector: u => u.Role),
+
+            BuildPane(
+                request,
+                columnKey: "createdAt",
+                title: "Año",
+                valueSelector: u => u.CreatedAt.Year.ToString()),
+
+            BuildPane(
+                request,
+                columnKey: "isActive",
+                title: "Activo",
+                valueSelector: u => u.IsActive ? "Activo" : "Inactivo")
+        };
+
+        return Task.FromResult<IReadOnlyList<TableSearchPane>>(panes);
+    }
+
+    private Task<IReadOnlyList<User>> ExportUsersAsync(TableDataRequest request)
+    {
+        var query = Users.AsQueryable();
+
+        query = ApplyUserSearch(query, request);
+        query = ApplyUserColumnFilters(query, request);
+        query = ApplyUserSearchPanes(query, request);
+        query = ApplyUserSorting(query, request);
+
+        return Task.FromResult<IReadOnlyList<User>>(query.ToList());
+    }
+
+    private TableSearchPane BuildPane(
+        TableDataRequest request,
+        string columnKey,
+        string title,
+        Func<User, string> valueSelector)
+    {
+        var selectedValues = GetSelectedPaneValues(request, columnKey);
+
+        var totalQuery = Users.AsQueryable();
+        totalQuery = ApplyUserSearch(totalQuery, request);
+        totalQuery = ApplyUserColumnFilters(totalQuery, request);
+
+        var visibleQuery = Users.AsQueryable();
+        visibleQuery = ApplyUserSearch(visibleQuery, request);
+        visibleQuery = ApplyUserColumnFilters(visibleQuery, request);
+        visibleQuery = ApplyUserSearchPanes(visibleQuery, request, excludeColumnKey: columnKey);
+
+        var totalCounts = totalQuery
+            .AsEnumerable()
+            .GroupBy(valueSelector, StringComparer.CurrentCultureIgnoreCase)
+            .ToDictionary(g => g.Key, g => g.Count(), StringComparer.CurrentCultureIgnoreCase);
+
+        var visibleCounts = visibleQuery
+            .AsEnumerable()
+            .GroupBy(valueSelector, StringComparer.CurrentCultureIgnoreCase)
+            .ToDictionary(g => g.Key, g => g.Count(), StringComparer.CurrentCultureIgnoreCase);
+
+        var values = totalCounts.Keys
+            .Where(value => visibleCounts.ContainsKey(value) || selectedValues.Contains(value))
+            .OrderBy(value => value, StringComparer.CurrentCultureIgnoreCase)
+            .ToList();
+
+        var options = values
+            .Select(value =>
+            {
+                totalCounts.TryGetValue(value, out var totalCount);
+                visibleCounts.TryGetValue(value, out var visibleCount);
+
+                return new TableSearchPaneOption(
+                    Value: value,
+                    Label: value,
+                    TotalCount: totalCount,
+                    VisibleCount: visibleCount,
+                    Selected: selectedValues.Contains(value));
+            })
+            .ToList();
+
+        return new TableSearchPane(
+            ColumnKey: columnKey,
+            Title: title,
+            Options: options,
+            SelectedCount: selectedValues.Count);
+    }
+
+    private static IReadOnlySet<string> GetSelectedPaneValues(TableDataRequest request, string columnKey)
+    {
+        return request.SearchPaneSelections
+            .FirstOrDefault(x => x.ColumnKey == columnKey)
+            ?.Values
+            .ToHashSet(StringComparer.CurrentCultureIgnoreCase)
+            ?? new HashSet<string>(StringComparer.CurrentCultureIgnoreCase);
+    }
+
+    private static IQueryable<User> ApplyUserSearch(IQueryable<User> query, TableDataRequest request)
+    {
+        if (string.IsNullOrWhiteSpace(request.SearchText))
+        {
+            return query;
+        }
+
+        var search = request.SearchText.Trim();
+
+        return query.Where(u =>
+            u.Name.Contains(search, StringComparison.CurrentCultureIgnoreCase) ||
+            u.Email.Contains(search, StringComparison.CurrentCultureIgnoreCase) ||
+            u.Role.Contains(search, StringComparison.CurrentCultureIgnoreCase) ||
+            u.Notes.Contains(search, StringComparison.CurrentCultureIgnoreCase) ||
+            u.CreatedAt.Year.ToString().Contains(search, StringComparison.CurrentCultureIgnoreCase) ||
+            (u.IsActive ? "Activo" : "Inactivo").Contains(search, StringComparison.CurrentCultureIgnoreCase));
+    }
+
+    private static IQueryable<User> ApplyUserColumnFilters(IQueryable<User> query, TableDataRequest request)
+    {
+        foreach (var filter in request.ColumnFilters)
+        {
+            var hasValue = !string.IsNullOrWhiteSpace(filter.Value);
+            var hasFrom = !string.IsNullOrWhiteSpace(filter.From);
+            var hasTo = !string.IsNullOrWhiteSpace(filter.To);
+
+            if (!hasValue && !hasFrom && !hasTo)
+            {
+                continue;
+            }
+
+            query = filter.ColumnKey switch
+            {
+                "name" when hasValue =>
+                    query.Where(u => u.Name.Contains(filter.Value!, StringComparison.CurrentCultureIgnoreCase)),
+
+                "email" when hasValue =>
+                    query.Where(u => u.Email.Contains(filter.Value!, StringComparison.CurrentCultureIgnoreCase)),
+
+                "role" when hasValue =>
+                    query.Where(u => u.Role == filter.Value),
+
+                "isActive" when bool.TryParse(filter.Value, out var active) =>
+                    query.Where(u => u.IsActive == active),
+
+                "createdAt" =>
+                    ApplyDateRangeFilter(query, filter.From, filter.To),
+
+                _ => query
+            };
+        }
+
+        return query;
+    }
+
+    private static IQueryable<User> ApplyDateRangeFilter(IQueryable<User> query, string? from, string? to)
+    {
+        if (DateTime.TryParse(from, out var fromDate))
+        {
+            query = query.Where(u => u.CreatedAt.Date >= fromDate.Date);
+        }
+
+        if (DateTime.TryParse(to, out var toDate))
+        {
+            query = query.Where(u => u.CreatedAt.Date <= toDate.Date);
+        }
+
+        return query;
+    }
+
+    private static IQueryable<User> ApplyUserSearchPanes(
+        IQueryable<User> query,
+        TableDataRequest request,
+        string? excludeColumnKey = null)
+    {
+        foreach (var pane in request.SearchPaneSelections)
+        {
+            if (pane.ColumnKey == excludeColumnKey || !pane.Values.Any())
+            {
+                continue;
+            }
+
+            query = pane.ColumnKey switch
+            {
+                "role" =>
+                    query.Where(u => pane.Values.Contains(u.Role)),
+
+                "createdAt" =>
+                    query.Where(u => pane.Values.Contains(u.CreatedAt.Year.ToString())),
+
+                "isActive" =>
+                    query.Where(u => pane.Values.Contains(u.IsActive ? "Activo" : "Inactivo")),
+
+                _ => query
+            };
+        }
+
+        return query;
+    }
+
+    private static IQueryable<User> ApplyUserSorting(IQueryable<User> query, TableDataRequest request)
+    {
+        var sorts = request.Sorts
+            .OrderBy(s => s.Priority)
+            .ToList();
+
+        if (!sorts.Any())
+        {
+            return query.OrderBy(u => u.Id);
+        }
+
+        IOrderedQueryable<User>? ordered = null;
+
+        foreach (var sort in sorts)
+        {
+            var asc = sort.Direction == TableSortDirection.Asc;
+
+            ordered = sort.ColumnKey switch
+            {
+                "name" => ApplyOrder(query, ordered, u => u.Name, asc),
+                "email" => ApplyOrder(query, ordered, u => u.Email, asc),
+                "role" => ApplyOrder(query, ordered, u => u.Role, asc),
+                "createdAt" => ApplyOrder(query, ordered, u => u.CreatedAt, asc),
+                "isActive" => ApplyOrder(query, ordered, u => u.IsActive, asc),
+                _ => ordered
+            };
+        }
+
+        return ordered ?? query.OrderBy(u => u.Id);
+    }
+
+    private static IOrderedQueryable<User> ApplyOrder<TKey>(
+        IQueryable<User> query,
+        IOrderedQueryable<User>? ordered,
+        Expression<Func<User, TKey>> selector,
+        bool asc)
+    {
+        if (ordered is null)
+        {
+            return asc
+                ? query.OrderBy(selector)
+                : query.OrderByDescending(selector);
+        }
+
+        return asc
+            ? ordered.ThenBy(selector)
+            : ordered.ThenByDescending(selector);
+    }
 
     private Task OnUserClicked(User user)
     {
@@ -184,14 +459,105 @@
         Console.WriteLine("Nuevo usuario");
     }
 
+    private void OtraCosa()
+    {
+        Console.WriteLine("otra cosa");
+    }
+
+    private void Oleee()
+    {
+        Console.WriteLine("oleee");
+    }
+
     private void EditUser(User user)
     {
         Console.WriteLine($"Editar: {user.Name}");
     }
 
+    private void WarnUser(User user)
+    {
+        Console.WriteLine($"Warning: {user.Name}");
+    }
+
     private void DeleteUser(User user)
     {
         Console.WriteLine($"Eliminar: {user.Name}");
+    }
+
+    private static List<User> GenerateUsers(int amount)
+    {
+        string[] names =
+        {
+            "Ana García", "Luis Pérez", "Marta López", "Carlos Ruiz",
+            "Lucía Torres", "Pedro Molina", "Sofía Herrera", "Diego Ramos",
+            "Elena Castro", "Javier Ortega", "Paula Navarro", "Andrés Romero"
+        };
+
+        string[] roles =
+        {
+            "Admin", "User", "Manager"
+        };
+
+        string[] notes =
+        {
+            "Tiene permisos completos.",
+            "Usuario estándar.",
+            "Cuenta desactivada temporalmente.",
+            "Pendiente de revisar perfil.",
+            "Responsable de equipo.",
+            "Sin actividad reciente.",
+            "Perfil actualizado recientemente.",
+            "Requiere validación de datos."
+        };
+
+        var users = new List<User>();
+        var random = new Random();
+
+        for (int i = 1; i <= amount; i++)
+        {
+            string name = names[random.Next(names.Length)];
+            string email = GenerateEmail(name, i);
+            string role = roles[random.Next(roles.Length)];
+            DateTime createdAt = GenerateRandomDate(random);
+            bool isActive = random.Next(0, 2) == 1;
+            string note = notes[random.Next(notes.Length)];
+
+            users.Add(new User(
+                i,
+                name,
+                email,
+                role,
+                createdAt,
+                isActive,
+                note
+            ));
+        }
+
+        return users;
+    }
+
+    private static string GenerateEmail(string name, int id)
+    {
+        string normalizedName = name
+            .ToLower()
+            .Replace("á", "a")
+            .Replace("é", "e")
+            .Replace("í", "i")
+            .Replace("ó", "o")
+            .Replace("ú", "u")
+            .Replace("ñ", "n")
+            .Replace(" ", ".");
+
+        return $"{normalizedName}{id}@app.com";
+    }
+
+    private static DateTime GenerateRandomDate(Random random)
+    {
+        int year = random.Next(2023, 2026);
+        int month = random.Next(1, 13);
+        int day = random.Next(1, DateTime.DaysInMonth(year, month) + 1);
+
+        return new DateTime(year, month, day);
     }
 
     private record User(

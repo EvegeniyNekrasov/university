@@ -19,13 +19,10 @@
 }
 else
 {
-    var visibleColumns = VisibleColumns;
-    
-    var searchPanes = GetSearchPanes(visibleColumns);
-
-    var view = CreateView(visibleColumns);
-
-    var showColumnFilterRow = ShouldShowColumnFilterRow(visibleColumns);
+    var tableColumns = TableColumns;
+    var searchPanes = GetSearchPanes(SearchPaneColumns);
+    var view = CreateView(tableColumns);
+    var showColumnFilterRow = ShouldShowColumnFilterRow(tableColumns);
 
     var tableWrapClass =
         $"dt-table-wrap {(StickyHeader ? "dt-sticky" : "")} {(ResponsiveCards ? "dt-responsive-cards" : "")}";
@@ -59,8 +56,8 @@ else
                 {
                     <div class="dt-search-wrap">
                         <span class="dt-search-icon">⌕</span>
-                        <input class="dt-input dt-search" placeholder="@GlobalSearchPlaceholder" value="@_searchText"
-                               disabled="@IsBusy" aria-label="Buscar en la tabla" @oninput="OnSearchChanged" />
+                        <input class="dt-input dt-search" placeholder="@GlobalSearchPlaceholder" value="@_searchInputText"
+                               disabled="@IsBusy" aria-label="Buscar en la tabla" @oninput="OnSearchInputChanged" />
                     </div>
                 }
 
@@ -102,7 +99,7 @@ else
                 @if (ShowExportButton)
                 {
                     <button type="button" class="dt-btn dt-btn-success" disabled="@IsBusy"
-                            @onclick="() => ExportCsvAsync(visibleColumns, view.Rows)">
+                            @onclick="() => ExportCsvAsync(tableColumns, view.Rows)">
                         Exportar CSV
                     </button>
                 }
@@ -233,7 +230,7 @@ else
                             <th class="dt-expand-col">@ExpandColumnHeader</th>
                         }
 
-                        @foreach (var column in visibleColumns)
+                        @foreach (var column in tableColumns)
                         {
                             <th class="@column.HeaderCssClass" aria-sort="@GetAriaSort(column)">
                                 <button type="button" class="dt-th-button @(column.Sortable ? "" : "disabled")"
@@ -263,7 +260,7 @@ else
                                 <th></th>
                             }
 
-                            @foreach (var column in visibleColumns)
+                            @foreach (var column in tableColumns)
                             {
                                 <th>
                                     @if (EnableColumnFilters && column.Filterable && column.ShowColumnFilter)
@@ -352,7 +349,7 @@ else
                         @for (var i = 0; i < LoadingRows; i++)
                         {
                             <tr>
-                                <td colspan="@GetColumnSpan(visibleColumns)">
+                                <td colspan="@GetColumnSpan(tableColumns)">
                                     <div class="dt-skeleton"></div>
                                 </td>
                             </tr>
@@ -361,7 +358,7 @@ else
                     else if (!view.Rows.Any())
                     {
                         <tr>
-                            <td class="dt-empty" colspan="@GetColumnSpan(visibleColumns)">
+                            <td class="dt-empty" colspan="@GetColumnSpan(tableColumns)">
                                 @if (EmptyTemplate is not null)
                                 {
                                     @EmptyTemplate
@@ -405,7 +402,7 @@ else
                                     </td>
                                 }
 
-                                @foreach (var column in visibleColumns)
+                                @foreach (var column in tableColumns)
                                 {
                                     <td class="@column.CssClass" data-label="@column.Title">
                                         @if (column.Template is not null)
@@ -431,7 +428,7 @@ else
                             @if (HasExpandableRows && isExpanded)
                             {
                                 <tr class="dt-details-row">
-                                    <td colspan="@GetColumnSpan(visibleColumns)">
+                                    <td colspan="@GetColumnSpan(tableColumns)">
                                         <div class="dt-details-panel">
                                             @RowDetails!(item)
                                         </div>
